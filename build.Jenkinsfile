@@ -18,7 +18,7 @@ node {
     def registryCredentialsId = "dockerhub_id"
 
 
-    docker.image('openjdk:8-jre-slim').inside("--entrypoint=''") {
+    docker.image('openjdk:8-jre-slim').inside("-v /var/run/docker.sock:/var/run/docker.sock --entrypoint=''") {
         withCredentials([usernamePassword(credentialsId: 'dockerhub_id', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
             stage('Login') {
                 sh "docker login -u ${USER} -p ${PASS} ${registryFqdn}"

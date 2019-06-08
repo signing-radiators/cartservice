@@ -18,34 +18,34 @@ node {
     def registryCredentialsId = "dockerhub_id"
 
 
-    docker.image('openjdk:8-jre-slim').inside("-v /var/run/docker.sock:/var/run/docker.sock --entrypoint=''") {
-        withCredentials([usernamePassword(credentialsId: 'dockerhub_id', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
-            stage('Login') {
-                sh "docker login -u ${USER} -p ${PASS} ${registryFqdn}"
-            }
+    withCredentials([usernamePassword(credentialsId: 'dockerhub_id', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+        stage('Login') {
+            sh "docker login -u ${USER} -p ${PASS} ${registryFqdn}"
+        }
 
-            stage('Build for scanning') {
-                sh "docker build -t ${registryFqdn}/${imageName}:${securityScanTag} ${DOCKER_CONTEXT}"
-            }
+        stage('Build for scanning') {
+            sh "docker build -t ${registryFqdn}/${imageName}:${securityScanTag} ${DOCKER_CONTEXT}"
+        }
 
-            stage('Sonarqube') {
-                withSonarQubeEnv('sonarqube') {
-                    def scannerHome = tool name: 'sonarqube'
-                    sh "${scannerHome}/bin/sonar-scanner"
+        stage('Push for security scan') {
+            sh "docker push ${registryFqdn}/${imageName}:${securityScanTag}"
+        }
+    }
+
+    docker.image('openjdk:8-jre-slim').inside("--entrypoint=''") {
+        stage('Sonarqube') {
+            withSonarQubeEnv('sonarqube') {
+                def scannerHome = tool name: 'sonarqube'
+                sh "${scannerHome}/bin/sonar-scanner"
+            }
+        }
+
+        stage("Quality Gate") {
+            timeout(time: 5, unit: 'MINUTES') {
+                def qg = waitForQualityGate()
+                if (qg.status != 'OK') {
+                    error "Pipeline aborted due to quality gate failure: ${qg.status}"
                 }
-            }
-
-            stage("Quality Gate") {
-                timeout(time: 5, unit: 'MINUTES') {
-                    def qg = waitForQualityGate()
-                    if (qg.status != 'OK') {
-                        error "Pipeline aborted due to quality gate failure: ${qg.status}"
-                    }
-                }
-            }
-
-            stage('Push for security scan') {
-                sh "docker push ${registryFqdn}/${imageName}:${securityScanTag}"
             }
         }
     }
